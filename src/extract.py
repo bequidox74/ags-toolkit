@@ -6,7 +6,7 @@ from typing import Literal
 
 from _internal.byte_reader import ByteReader
 from _internal.utils import check, chunked_copy
-from game_data import CLib
+from data.clib import CLib
 
 type ClibFileType = Literal["ags", "exe", "001", ""]
 
