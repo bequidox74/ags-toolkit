@@ -1,7 +1,5 @@
 from typing import BinaryIO
 
-from _internal.byte_reader import ByteReader
-
 
 def check(cond: bool, message: str | None = None) -> None:
     if not cond:
@@ -9,7 +7,7 @@ def check(cond: bool, message: str | None = None) -> None:
 
 
 def chunked_copy(
-    src: ByteReader,
+    src: BinaryIO,
     dst: BinaryIO,
     size: int,
     chunk_size: int = 64 * 1024,

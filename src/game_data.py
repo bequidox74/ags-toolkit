@@ -14,6 +14,11 @@ class CLib:
         offset: int  # u64
         size: int  # u64
 
+        def __str__(self) -> str:
+            return (
+                f"{self.name} [{self.df_index}], {self.size} bytes @0x{self.offset:X}"
+            )
+
     START_SIGN: ClassVar[bytes] = b"CLIB\x1a"
     END_SIGN: ClassVar[bytes] = b"CLIB\x01\x02\x03\x04SIGE"
 
@@ -73,9 +78,7 @@ class CLib:
         sw.println("Assets:")
         sw.indent()
         for file in self.files:
-            sw.println(
-                f"- {file.name} [{file.df_index}], {file.size} bytes @0x{file.offset:X}"
-            )
+            sw.println(f"- {file!s}")
         sw.println()
         sw.dedent()
 
