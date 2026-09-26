@@ -1,5 +1,6 @@
 import argparse
 import fnmatch
+import json
 import os
 from io import StringIO
 from pathlib import Path
@@ -26,6 +27,12 @@ def _init_assets_parser(subparsers) -> None:
 
     assets_list = assets_sub.add_parser("list")
     assets_list.add_argument("-q", "--quiet", action="store_true")
+    assets_list.add_argument(
+        "-j",
+        "--json",
+        action="store_true",
+        help="Format index as JSON instead",
+    )
     assets_list.add_argument("-o", "--output", type=Path, required=False)
     assets_list.set_defaults(func=list_assets)
 
@@ -49,13 +56,25 @@ def list_assets(args: argparse.Namespace) -> None:
     if args.quiet and args.output is None:
         raise ValueError("--quiet specified with no --output path")
     clib = extract.read_clib(args.input)
+
     with StringIO() as sio:
-        print(str(clib), end="", file=sio, flush=True)
+        if args.json:
+            print(json.dumps(clib.to_dict(), indent=2), file=sio)
+        else:
+            print(str(clib), end="", file=sio)
+
         if not args.quiet:
             print(sio.getvalue())
+
         if args.output is not None:
-            os.makedirs(args.output.parent, exist_ok=True)
-            with open(args.output / "assets.index", "w", encoding="utf-8") as f:
+            outpath: Path
+            if args.output.is_dir():
+                suffix = ".json" if args.json else ".index"
+                outpath = args.output / f"assets{suffix}"
+            else:
+                outpath = args.output
+                os.makedirs(outpath.parent, exist_ok=True)
+            with open(outpath, "w", encoding="utf-8") as f:
                 f.write(sio.getvalue())
 
 

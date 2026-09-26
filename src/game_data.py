@@ -1,5 +1,6 @@
+import dataclasses
 from dataclasses import dataclass
-from typing import ClassVar, NamedTuple
+from typing import ClassVar
 
 from _internal.byte_reader import ByteReader
 from _internal.string_writer import StringWriter
@@ -8,7 +9,8 @@ from _internal.utils import check
 
 @dataclass
 class CLib:
-    class File(NamedTuple):
+    @dataclass
+    class File:
         name: str  # cstr
         df_index: int  # u8
         offset: int  # u64
@@ -61,6 +63,9 @@ class CLib:
             num_files,
             files,
         )
+
+    def to_dict(self) -> dict:
+        return dataclasses.asdict(self)
 
     def __str__(self) -> str:
         sw = StringWriter()
