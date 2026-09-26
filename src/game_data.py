@@ -1,0 +1,57 @@
+from dataclasses import dataclass
+from typing import ClassVar, NamedTuple
+
+from _internal.byte_reader import ByteReader
+from _internal.utils import check
+
+
+@dataclass
+class CLib:
+    class File(NamedTuple):
+        name: str  # cstr
+        df_index: int  # u8
+        offset: int  # u64
+        size: int  # u64
+
+    START_SIGN: ClassVar[bytes] = b"CLIB\x1a"
+    END_SIGN: ClassVar[bytes] = b"CLIB\x01\x02\x03\x04SIGE"
+
+    version: int  # u8
+    df_index: int  # u8
+    num_dfiles: int  # u32
+    dfile_names: list[str]  # cstr
+    num_files: int  # u32
+    files: list[CLib.File]
+
+    @classmethod
+    def read(cls, br: ByteReader) -> CLib:
+        sig = br.read(len(CLib.START_SIGN))
+        check(sig == CLib.START_SIGN, "CLIB start signature mismatch")
+
+        version = br.u8()
+        df_index = br.u8()
+        check(df_index == 0, "CLIB data file index must be 0")
+        br.skip(4)  # reserved options
+
+        num_dfiles = br.u32()
+        dfile_names: list[str] = []
+        for _ in range(num_dfiles):
+            dfile_names.append(br.cstr())
+
+        num_files = br.u32()
+        files: list[CLib.File] = []
+        for _ in range(num_files):
+            name = br.cstr()
+            idx = br.u8()
+            offset = br.u64()
+            size = br.u64()
+            files.append(CLib.File(name, idx, offset, size))
+
+        return CLib(
+            version,
+            df_index,
+            num_dfiles,
+            dfile_names,
+            num_files,
+            files,
+        )
