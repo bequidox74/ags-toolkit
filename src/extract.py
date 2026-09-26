@@ -67,4 +67,4 @@ def unpack_assets(dfile: Path, outdir: Path, filter_: str) -> None:
             outpath = outdir / f.name
             os.makedirs(outdir, exist_ok=True)
             with open(outpath, "wb") as sout:
-                chunked_copy(br, sout, f.size)
+                chunked_copy(sin, sout, f.size)
