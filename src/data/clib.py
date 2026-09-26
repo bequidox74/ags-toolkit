@@ -24,6 +24,8 @@ class CLib:
     START_SIGN: ClassVar[bytes] = b"CLIB\x1a"
     END_SIGN: ClassVar[bytes] = b"CLIB\x01\x02\x03\x04SIGE"
 
+    self_offset: int
+
     version: int  # u8
     df_index: int  # u8
     num_dfiles: int  # u32
@@ -33,6 +35,7 @@ class CLib:
 
     @classmethod
     def read(cls, br: ByteReader) -> CLib:
+        self_offset = br.tell()
         sig = br.read(len(CLib.START_SIGN))
         check(sig == CLib.START_SIGN, "CLIB start signature mismatch")
 
@@ -56,6 +59,7 @@ class CLib:
             files.append(CLib.File(name, idx, offset, size))
 
         return CLib(
+            self_offset,
             version,
             df_index,
             num_dfiles,

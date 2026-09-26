@@ -15,7 +15,7 @@ class ByteReader:
         self,
         stream: BinaryIO,
         endian: ByteReader.Endian = "little",
-        encoding: str = "utf-8",
+        encoding: str = "latin-1",
     ) -> None:
         self.stream = stream
         self.endian = endian
@@ -90,11 +90,11 @@ class ByteReader:
         l = self.u32()
         data = self.stream.read(l)
         if strip:
-            data.rstrip(b"\x00")
+            data = data.rstrip(b"\x00")
         return data.decode(encoding or self.encoding)
 
     def string(self, size: int, encoding: str | None = None, strip: bool = True) -> str:
         data = self.stream.read(size)
         if strip:
-            data.rstrip(b"\x00")
+            data = data.rstrip(b"\x00")
         return data.decode(encoding or self.encoding)
