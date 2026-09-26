@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import ClassVar, NamedTuple
 
 from _internal.byte_reader import ByteReader
+from _internal.string_writer import StringWriter
 from _internal.utils import check
 
 
@@ -55,3 +56,27 @@ class CLib:
             num_files,
             files,
         )
+
+    def __str__(self) -> str:
+        sw = StringWriter()
+        sw.println(f"=== CLIB version {self.version} ===")
+        sw.println(f"Version: {self.version}")
+        sw.println(f"Number of data files: {self.num_dfiles}")
+
+        sw.println("Data file names:")
+        sw.indent()
+        for name in self.dfile_names:
+            sw.println(f"- {name}")
+        sw.println()
+        sw.dedent()
+
+        sw.println("Assets:")
+        sw.indent()
+        for file in self.files:
+            sw.println(
+                f"- {file.name} [{file.df_index}], {file.size} bytes @0x{file.offset:X}"
+            )
+        sw.println()
+        sw.dedent()
+
+        return str(sw)

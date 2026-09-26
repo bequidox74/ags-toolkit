@@ -1,9 +1,11 @@
+import fnmatch
 import io
+import os
 from pathlib import Path
 from typing import Literal
 
 from _internal.byte_reader import ByteReader
-from _internal.utils import check
+from _internal.utils import check, chunked_copy
 from game_data import CLib
 
 type ClibFileType = Literal["ags", "exe", "001", ""]
@@ -52,3 +54,17 @@ def read_exe(path: Path) -> CLib:
 
         s.seek(offset)
         return CLib.read(br)
+
+
+def unpack_assets(dfile: Path, outdir: Path, filter_: str) -> None:
+    clib = read_clib(dfile)
+    with open(dfile, "rb") as sin:
+        br = ByteReader(sin)
+        for f in clib.files:
+            if not fnmatch.fnmatch(f.name, filter_):
+                continue
+            br.seek(f.offset)
+            outpath = outdir / f.name
+            os.makedirs(outdir, exist_ok=True)
+            with open(outpath, "wb") as sout:
+                chunked_copy(br, sout, f.size)

@@ -31,6 +31,9 @@ class ByteReader:
     def skip(self, size: int) -> None:
         self.stream.seek(size, io.SEEK_CUR)
 
+    def seek(self, to: int, whence: int = io.SEEK_SET) -> None:
+        self.stream.seek(to, whence)
+
     def byte(self) -> int:
         return self.stream.read(1)[0]
 

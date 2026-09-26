@@ -1,0 +1,2 @@
+[tools.pylint.main]
+source-roots = "src"
