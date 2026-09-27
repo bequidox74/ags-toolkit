@@ -20,7 +20,18 @@ class ByteReader:
         self.stream = stream
         self.endian = endian
         self.encoding = encoding
-        self._bo = self._ENDIAN_TO_BO[self.endian]
+
+        bo = self._ENDIAN_TO_BO[self.endian]
+        self._fi8 = f"{bo}b"
+        self._fu8 = f"{bo}b"
+        self._fi16 = f"{bo}h"
+        self._fu16 = f"{bo}H"
+        self._fi32 = f"{bo}i"
+        self._fu32 = f"{bo}I"
+        self._fi64 = f"{bo}q"
+        self._fu64 = f"{bo}Q"
+        self._ff32 = f"{bo}f"
+        self._ff64 = f"{bo}d"
 
     def read(self, size: int = -1) -> bytes:
         return self.stream.read(size)
@@ -39,43 +50,43 @@ class ByteReader:
 
     def i8(self) -> int:
         v = self.stream.read(1)
-        return struct.unpack(f"{self._bo}b", v)[0]
+        return struct.unpack(self._fi8, v)[0]
 
     def u8(self) -> int:
         v = self.stream.read(1)
-        return struct.unpack(f"{self._bo}B", v)[0]
+        return struct.unpack(self._fu8, v)[0]
 
     def i16(self) -> int:
         v = self.stream.read(2)
-        return struct.unpack(f"{self._bo}h", v)[0]
+        return struct.unpack(self._fi16, v)[0]
 
     def u16(self) -> int:
         v = self.stream.read(2)
-        return struct.unpack(f"{self._bo}H", v)[0]
+        return struct.unpack(self._fu16, v)[0]
 
     def i32(self) -> int:
         v = self.stream.read(4)
-        return struct.unpack(f"{self._bo}i", v)[0]
+        return struct.unpack(self._fi32, v)[0]
 
     def u32(self) -> int:
         v = self.stream.read(4)
-        return struct.unpack(f"{self._bo}I", v)[0]
+        return struct.unpack(self._fu32, v)[0]
 
     def i64(self) -> int:
         v = self.stream.read(8)
-        return struct.unpack(f"{self._bo}q", v)[0]
+        return struct.unpack(self._fi64, v)[0]
 
     def u64(self) -> int:
         v = self.stream.read(8)
-        return struct.unpack(f"{self._bo}Q", v)[0]
+        return struct.unpack(self._fu64, v)[0]
 
     def f32(self) -> float:
         v = self.stream.read(4)
-        return struct.unpack(f"{self._bo}f", v)[0]
+        return struct.unpack(self._ff32, v)[0]
 
     def f64(self) -> float:
         v = self.stream.read(8)
-        return struct.unpack(f"{self._bo}d", v)[0]
+        return struct.unpack(self._ff64, v)[0]
 
     def cstr(self, encoding: str | None = None) -> str:
         data = bytearray()
@@ -86,6 +97,7 @@ class ByteReader:
             data.append(b)
         return bytes(data).decode(encoding or self.encoding)
 
+    # Pascal string (length prefixed)
     def pstr(self, encoding: str | None = None, strip: bool = True) -> str:
         l = self.u32()
         data = self.stream.read(l)
