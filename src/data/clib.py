@@ -1,10 +1,24 @@
 import dataclasses
+import io
 from dataclasses import dataclass
-from typing import ClassVar
+from pathlib import Path
+from typing import ClassVar, Literal
 
 from _internal.byte_reader import ByteReader
 from _internal.string_writer import StringWriter
 from _internal.utils import check
+
+type ClibFileType = Literal["ags", "exe", "001", ""]
+
+AGS_SUFFIX = ".ags"
+EXE_SUFFIX = ".exe"
+OO1_SUFFIX = ".001"
+
+_SUFFIX_TO_TYPE: dict[str, ClibFileType] = {
+    AGS_SUFFIX: "ags",
+    EXE_SUFFIX: "exe",
+    OO1_SUFFIX: "001",
+}
 
 
 @dataclass
@@ -67,6 +81,41 @@ class CLib:
             num_files,
             files,
         )
+
+    @classmethod
+    def read_file(cls, data_path: Path, type_: ClibFileType = "") -> CLib:
+        if not type_:
+            # determine what we're dealing with.
+            suffix = data_path.suffix.casefold()
+            type_ = _SUFFIX_TO_TYPE[suffix]
+
+        clib: CLib
+        if type_ == "ags":
+            clib = CLib.read_ags(data_path)
+        elif type_ == "exe":
+            clib = CLib.read_exe(data_path)
+        elif type_ == "001":
+            raise NotImplementedError(".001 is not supported")
+        else:
+            raise ValueError(f"unknown type: {type_}")
+        return clib
+
+    @classmethod
+    def read_ags(cls, path: Path) -> CLib:
+        with open(path, "rb") as s:
+            return CLib.read(ByteReader(s))
+
+    @classmethod
+    def read_exe(cls, path: Path) -> CLib:
+        with open(path, "rb") as s:
+            br = ByteReader(s)
+            s.seek(-(len(CLib.END_SIGN) + 8), io.SEEK_END)
+            offset = br.u64()
+            signature = s.read(len(CLib.END_SIGN))
+            check(signature == CLib.END_SIGN, "CLIB end signature mismatch")
+
+            s.seek(offset)
+            return CLib.read(br)
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)

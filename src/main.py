@@ -5,7 +5,6 @@ from argparse import ArgumentParser, Namespace
 from io import StringIO
 from pathlib import Path
 
-import extract
 from _internal.byte_reader import ByteReader
 from _internal.utils import chunked_copy
 from data.clib import CLib, StringWriter
@@ -68,7 +67,7 @@ def _init_gamedata_parser(subparsers) -> None:
 def list_assets(args: Namespace) -> None:
     if args.quiet and args.output is None:
         raise ValueError("--quiet specified with no --output path")
-    clib = extract.read_clib(args.input)
+    clib = CLib.read_file(args.input)
 
     with StringIO() as sio:
         if args.json:
@@ -87,7 +86,7 @@ def list_assets(args: Namespace) -> None:
 
 
 def extract_assets(args: Namespace) -> None:
-    clib = extract.read_clib(args.input)
+    clib = CLib.read_file(args.input)
     extracted = 0
     for file in clib.files:
         if file.df_index != 0:
@@ -116,7 +115,7 @@ def extract_assets(args: Namespace) -> None:
 
 
 def extract_gamedata(args: Namespace) -> None:
-    clib = extract.read_clib(args.input)
+    clib = CLib.read_file(args.input)
     gdata_file: CLib.File
     for file in clib.files:
         if file.name == GAMEDATA_NAME:
