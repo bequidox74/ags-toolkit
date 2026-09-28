@@ -9,9 +9,11 @@ def check(cond: bool, message: str | None = None) -> None:
 def chunked_copy(
     src: BinaryIO,
     dst: BinaryIO,
+    offset: int,
     size: int,
     chunk_size: int = 64 * 1024,
 ) -> None:
+    src.seek(offset)
     copied: int = 0
     while copied < size:
         left = size - copied
