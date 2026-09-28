@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import IntFlag
 
-from extract import ByteReader
+from _internal.byte_reader import ByteReader
 
 
 class DialogFlag(IntFlag):
