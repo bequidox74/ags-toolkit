@@ -23,7 +23,7 @@ class ByteReader:
 
         bo = self._ENDIAN_TO_BO[self.endian]
         self._fi8 = f"{bo}b"
-        self._fu8 = f"{bo}b"
+        self._fu8 = f"{bo}B"
         self._fi16 = f"{bo}h"
         self._fu16 = f"{bo}H"
         self._fi32 = f"{bo}i"
@@ -111,7 +111,8 @@ class ByteReader:
             data = data.rstrip(b"\x00")
         return data.decode(encoding or self.encoding)
 
-    def string(self, size: int, encoding: str | None = None, strip: bool = True) -> str:
+    # fixed size string
+    def fstr(self, size: int, encoding: str | None = None, strip: bool = True) -> str:
         data = self.stream.read(size)
         if strip:
             data = data.rstrip(b"\x00")

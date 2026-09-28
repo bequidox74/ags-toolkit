@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from enum import IntFlag
 
+from extract import ByteReader
+
 
 class DialogFlag(IntFlag):
     ON = 1 << 0
@@ -13,7 +15,7 @@ class DialogFlag(IntFlag):
 class Dialog:
     options: list[str]  # str[150] * 30
     flags: list[int]  # u32[30]
-    option_scripts: bytes  # 4
+    option_scripts: int  # u32
     entry_points: list[int]  # u2[30]
     startup_entry_point: int  # u16
     code_size: int  # u16
@@ -21,10 +23,10 @@ class Dialog:
     show_text_parser: bool  # u32
 
     @classmethod
-    def read(cls, br) -> Dialog:
-        options = [br.string(150) for _ in range(30)]
+    def read(cls, br: ByteReader) -> Dialog:
+        options = [br.fstr(150) for _ in range(30)]
         flags = [br.u32() for _ in range(30)]
-        option_scripts = br.read(4)
+        option_scripts = br.u32()
         entry_points = [br.u16() for _ in range(30)]
         startup_entry_point = br.u16()
         code_size = br.u16()

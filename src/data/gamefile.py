@@ -36,10 +36,66 @@ class GameResolutionType(IntEnum):
 
 @dataclass
 class GameSetup:
-    @dataclass
-    class Resolution:
+    class Resolution(NamedTuple):
         width: int  # u32
         height: int  # u32
+
+    class Option(IntEnum):
+        DEBUGMODE = 0
+        SCORESOUND = 1
+        WALKONLOOK = 2
+        DIALOGIFACE = 3
+        ANTIGLIDE = 4
+        TWCUSTOM = 5
+        DIALOGGAP = 6
+        NOSKIPTEXT = 7
+        DISABLEOFF = 8
+        ALWAYSSPCH = 9
+        SPEECHTYPE = 10
+        PIXPERFECT = 11
+        NOWALKMODE = 12
+        LETTERBOX = 13
+        FIXEDINVCURSOR = 14
+        NOLOSEINV = 15
+        HIRES_FONTS = 16
+        SPLITRESOURCES = 17
+        ROTATECHARS = 18
+        FADETYPE = 19
+        HANDLEINVCLICKS = 20
+        MOUSEWHEEL = 21
+        DIALOGNUMBERED = 22
+        DIALOGUPWARDS = 23
+        CROSSFADEMUSIC = 24
+        ANTIALIASFONTS = 25
+        THOUGHTGUI = 26
+        TURNTOFACELOC = 27
+        RIGHTLEFTWRITE = 28
+        DUPLICATEINV = 29
+        SAVESCREENSHOT = 30
+        PORTRAITSIDE = 31
+        STRICTSCRIPTING = 32
+        LEFTTORIGHTEVAL = 33
+        COMPRESSSPRITES = 34
+        STRICTSTRINGS = 35
+        NEWGUIALPHA = 36
+        RUNGAMEDLGOPTS = 37
+        NATIVECOORDINATES = 38
+        GLOBALTALKANIMSPD = 39
+        HIGHESTOPTION_321 = 39
+        SPRITEALPHA = 40
+        SAFEFILEPATHS = 41
+        DIALOGOPTIONSAPI = 42
+        BASESCRIPTAPI = 43
+        SCRIPTCOMPATLEV = 44
+        RENDERATSCREENRES = 45
+        RELATIVEASSETRES = 46
+        WALKSPEEDABSOLUTE = 47
+        CLIPGUICONTROLS = 48
+        GAMETEXTENCODING = 49
+        KEYHANDLEAPI = 50
+        CUSTOMENGINETAG = 51
+        NOMODMUSIC = 98
+        LIPSYNCTEXT = 99
 
     NUM_OPTIONS: ClassVar = 100
     NUM_PALETTE_COLORS: ClassVar = 256
@@ -54,7 +110,7 @@ class GameSetup:
     num_chars: int  # u32
     player_char_id: int  # u32
     max_score: int  # u32
-    num_inv_items: int  # u16 (= raw - 1)
+    num_invitems: int  # u16 (= raw - 1)
     # padding 2
     num_dialogs: int  # u32
     num_dlgmessage: int  # u32
@@ -80,7 +136,7 @@ class GameSetup:
 
     @classmethod
     def read(cls, br: ByteReader) -> GameSetup:
-        game_name = br.string(50)
+        game_name = br.fstr(50)
         br.skip(2)
         options: list[int] = []
         for _ in range(GameSetup.NUM_OPTIONS):
@@ -209,7 +265,7 @@ class InventoryItem:
 
     @classmethod
     def read(cls, br: ByteReader) -> InventoryItem:
-        description = br.string(25)
+        description = br.fstr(25)
         br.skip(3)
         image = br.u32()
         cursor_image = br.u32()
@@ -245,7 +301,7 @@ class Cursor:
         hotspot_x = br.i16()
         hotspot_y = br.i16()
         num_views = br.u16()
-        name = br.string(10)
+        name = br.fstr(10)
         flags = br.u8()
         br.skip(3)
 
@@ -287,10 +343,198 @@ class ParserWord:
         return ParserWord(word, word_group)
 
 
-class Script(NamedTuple):
+@dataclass
+class Script:
     offset: int
     size: int
     name: str
+
+    @classmethod
+    def read(cls, br: ByteReader) -> Script:
+        offset = br.tell()
+
+        br.skip(len(SCOM_SIGNATURE) + 4)
+        len_gdata = br.u32()
+        num_codes = br.u32()
+        len_strings = br.u32()
+        br.skip(len_gdata)
+        br.skip(num_codes * 4)
+        br.skip(len_strings)
+        num_fixups = br.u32()
+        br.skip(num_fixups)  # fixup types
+        br.skip(num_fixups * 4)  # fixups
+        num_imports = br.u32()
+        for _ in range(num_imports):
+            br.cstr()  # name
+        num_exports = br.u32()
+        for _ in range(num_exports):
+            br.cstr()  # name
+            br.skip(4)  # address
+        num_sections = br.u32()
+        section_names: list[str] = []
+        for _ in range(num_sections):
+            section_names.append(br.cstr())  # name
+            br.skip(4)  # offset
+        br.skip(4)  # signature
+
+        size = br.tell() - offset
+        name = section_names[0] if section_names else ""
+        return Script(offset, size, name)
+
+
+@dataclass
+class PluginData:
+    file_name: str  # cstr
+    offset: int
+    size: int  # int
+
+    @classmethod
+    def read(cls, br: ByteReader) -> PluginData:
+        file_name = br.cstr()
+        offset = br.tell()
+        size = br.u32()
+        br.skip(size)
+        return PluginData(file_name, offset, size)
+
+
+@dataclass
+class SchemaItem:
+    name: str
+    type: int
+    description: str
+    default: str
+
+    @classmethod
+    def read(cls, br: ByteReader) -> SchemaItem:
+        return SchemaItem(
+            name=br.pstr(),
+            type=br.u32(),
+            description=br.pstr(),
+            default=br.pstr(),
+        )
+
+
+@dataclass
+class CustomProperties:
+    cprops_ver: int
+    props: dict[str, str]
+
+    @classmethod
+    def read(cls, br: ByteReader) -> CustomProperties:
+        cpver = br.u32()
+        props: dict[str, str] = {}
+        for _ in range(br.u32()):
+            props[br.pstr()] = br.pstr()
+        return CustomProperties(cpver, props)
+
+
+@dataclass
+class AudioClipType:
+    class CrossfadeSpeed(IntEnum):
+        NO = 0
+        SLOW = 1
+        SLOWISH = 2
+        MEDIUM = 3
+        FAST = 4
+
+    id: int
+    reserved_channels: int
+    reduce_volume: bool
+    crossfade_speed: CrossfadeSpeed
+    # reserved u32
+
+    @classmethod
+    def read(cls, br: ByteReader) -> AudioClipType:
+        clip = AudioClipType(
+            id=br.u32(),
+            reserved_channels=br.u32(),
+            reduce_volume=bool(br.u32()),
+            crossfade_speed=AudioClipType.CrossfadeSpeed(br.u32()),
+        )
+        br.u32()  # reserved
+        return clip
+
+
+@dataclass
+class AudioClip:
+    class BundlingType(IntEnum):
+        GAME_EXE = 1
+        SEPARATE_VOX = 2
+
+    class FileType(IntEnum):
+        OGG = 1
+        MP3 = 2
+        WAV = 3
+        VOC = 4
+        MIDI = 5
+        MOD = 6
+
+    id: int
+    script_name: str  # 30
+    file_name: str  # 15
+    bundling_type: AudioClip.BundlingType  # u8
+    type: int  # u8
+    file_type: AudioClip.FileType  # u8
+    repeat: bool  # u8
+    # padding 1
+    priority: int  # u8
+    volume: int  # u8
+    # padding 2
+    # reserved 1
+
+    @classmethod
+    def read(cls, br: ByteReader) -> AudioClip:
+        id_ = br.u32()
+        script_name = br.fstr(30)
+        file_name = br.fstr(15)
+        bundling_type = AudioClip.BundlingType(br.u8())
+        type_ = br.u8()
+        file_type = AudioClip.FileType(br.u8())
+        repeat = bool(br.u8())
+        br.skip(1)  # padding
+        priority = br.u16()
+        volume = br.u16()
+        br.skip(2)  # padding
+        br.u32()  # reserved
+
+        return AudioClip(
+            id=id_,
+            script_name=script_name,
+            file_name=file_name,
+            bundling_type=bundling_type,
+            type=type_,
+            file_type=file_type,
+            repeat=repeat,
+            priority=priority,
+            volume=volume,
+        )
+
+
+@dataclass
+class Room:
+    number: int  # u32
+    description: str  # cstr
+
+    @classmethod
+    def read(cls, br: ByteReader) -> Room:
+        return Room(br.u32(), br.cstr())
+
+
+@dataclass
+class Extension:
+    type: int  # u8
+    ext_id: str  # 16
+    size: int  # u64
+    offset: int  # tell
+
+    @classmethod
+    def read(cls, br: ByteReader) -> Extension:
+        type_ = br.u8()
+        ext_id = br.fstr(16)
+        size = br.u64()
+        offset = br.tell()
+        br.skip(size)
+        return Extension(type_, ext_id, size, offset)
 
 
 @dataclass
@@ -301,7 +545,7 @@ class GameData:
     len_editor_version: int  # u32
     editor_version: str  # str[len_editor_version]
     extended_engine_caps: int
-    game_setup: GameSetup
+    setup: GameSetup
     guid: str  # str[40]
     save_game_file_ext: str  # str[20]
     save_game_folder_name: str  # str[50]
@@ -311,7 +555,7 @@ class GameData:
     inventory_items: list[InventoryItem]
     cursors: list[Cursor]
     char_interact_scripts: list[InteractionScript]
-    inv_item_interact_scripts: list[InteractionScript]
+    invitem_inter_scr: list[InteractionScript]
     # num_parser_words: int  # u32
     parser_words: list[ParserWord]
     global_script: Script
@@ -323,119 +567,126 @@ class GameData:
     lipsync: list[str]
     dialogs: list[Dialog]
     guis: GameGuis
+    plugins_ver: int
+    plugin_data: list[PluginData]
+    custom_prop_ver: int
+    schemas: list[SchemaItem]
+    char_cprops: list[CustomProperties]
+    item_cprops: list[CustomProperties]
+    view_names: list[str]  # cstr
+    item_names: list[str]  # cstr
+    dialog_names: list[str]  # cstr
+    audio_clip_types: list[AudioClipType]
+    audio_clips: list[AudioClip]
+    play_sound_on_score: int  # u32
+    rooms: list[Room]
+    fonts_ext: Extension
+    cursors_ext: Extension
 
     @classmethod
     def read(cls, br: ByteReader) -> GameData:
-        signature = br.string(len(GameData.SIGNATURE))
+        signature = br.fstr(len(GameData.SIGNATURE))
         check(signature == GameData.SIGNATURE, "game data file signature mismatch")
         version = br.u32()
         len_editor_version = br.u32()
-        editor_version = br.string(len_editor_version)
+        editor_version = br.fstr(len_editor_version)
         extended_engine_caps = br.u32()
-        game_setup = GameSetup.read(br)
-        guid = br.string(40)
-        save_game_file_ext = br.string(20)
-        save_game_folder_name = br.string(50)
-        fonts: list[Font] = []
-        for _ in range(game_setup.num_fonts):
-            fonts.append(Font.read(br))
+        gs = GameSetup.read(br)
+        guid = br.fstr(40)
+        save_game_file_ext = br.fstr(20)
+        save_game_folder_name = br.fstr(50)
+        fonts = [Font.read(br) for _ in range(gs.num_fonts)]
         topmost_sprite = br.u32() - 1
-        sprite_flags: list[int] = []
-        for _ in range(topmost_sprite + 1):
-            sprite_flags.append(br.u8())
+        sprite_flags = [br.u8() for _ in range(topmost_sprite + 1)]
         br.skip(68)  # unused inventory item slot 0
-        inventory_items: list[InventoryItem] = []
-        for _ in range(game_setup.num_inv_items):
-            inventory_items.append(InventoryItem.read(br))
-        cursors: list[Cursor] = []
-        for _ in range(game_setup.num_cursors):
-            cursors.append(Cursor.read(br))
-        char_interact_scripts: list[InteractionScript] = []
-        for _ in range(game_setup.num_chars):
-            char_interact_scripts.append(InteractionScript.read(br))
-        inv_item_interact_scripts: list[InteractionScript] = []
-        for _ in range(game_setup.num_inv_items):
-            inv_item_interact_scripts.append(InteractionScript.read(br))
-        num_parser_words = br.u32()
-        parser_words: list[ParserWord] = []
-        for _ in range(num_parser_words):
-            parser_words.append(ParserWord.read(br))
-        global_script = skip_scom(br)
-        dialog_script = skip_scom(br)
+        inventory_items = [InventoryItem.read(br) for _ in range(gs.num_invitems)]
+        cursors = [Cursor.read(br) for _ in range(gs.num_cursors)]
+        char_inter_scr = [InteractionScript.read(br) for _ in range(gs.num_chars)]
+        invitem_inter_scr = [InteractionScript.read(br) for _ in range(gs.num_invitems)]
+        parser_words = [ParserWord.read(br) for _ in range(br.u32())]
+        global_script = Script.read(br)
+        dialog_script = Script.read(br)
         num_scripts = br.u32()
-        scripts: list[Script] = [skip_scom(br) for _ in range(num_scripts)]
-        views: list[View] = [View.read(br) for _ in range(game_setup.num_views)]
-        characters: list[Character] = [
-            Character.read(br) for _ in range(game_setup.num_chars)
-        ]
-        lipsync = [br.string(50) for _ in range(20)]
+        scripts: list[Script] = [Script.read(br) for _ in range(num_scripts)]
+        views: list[View] = [View.read(br) for _ in range(gs.num_views)]
+        characters: list[Character] = [Character.read(br) for _ in range(gs.num_chars)]
+        lipsync = [br.fstr(50) for _ in range(20)]
         global_messages: list[str] = []
-        for hm in game_setup.has_game_message:
+        for hm in gs.has_game_message:
             if not hm:
                 continue
             size = br.u32()
             s = encrypt.decrypt(br.read(size))
             global_messages.append(s)
-        dialogs = [Dialog.read(br) for _ in range(game_setup.num_dialogs)]
+        dialogs = [Dialog.read(br) for _ in range(gs.num_dialogs)]
         guis = GameGuis.read(br)
+        plugins_ver = br.u32()  # plugins version
+        plugin_data = [PluginData.read(br) for _ in range(br.u32())]
+        custom_prop_ver = br.u32()
+        schemas = [SchemaItem.read(br) for _ in range(br.u32())]
+        char_cprops = [CustomProperties.read(br) for _ in range(gs.num_chars)]
+        br.u32()  # unused inv slot 0 property header
+        br.u32()  # num of its props
+        item_cprops = [CustomProperties.read(br) for _ in range(gs.num_invitems)]
+        view_names = [br.cstr() for _ in range(gs.num_views)]
+        br.u8()  # inv slot 0 name
+        item_names = [br.cstr() for _ in range(gs.num_invitems)]
+        dialog_names = [br.cstr() for _ in range(gs.num_dialogs)]
+        audio_clip_types = [AudioClipType.read(br) for _ in range(br.u32())]
+        audio_clips = [AudioClip.read(br) for _ in range(br.u32())]
+        rooms: list[Room] = []
+        if bool(gs.options[GameSetup.Option.DEBUGMODE]):
+            rooms = [Room.read(br) for _ in range(br.u32())]
+        play_sound_on_score = br.u32()
+        fonts_ext = Extension.read(br)
+        cursors_ext = Extension.read(br)
+
+        end = br.byte()
+        check(end == 255, f"0xFF expected at extensions end, got 0x{end:0X} instead")
+        eof = br.byte()
+        check(not eof, f"EOF expected, got 0x{eof:0X} instead")
 
         return GameData(
-            version,
-            len_editor_version,
-            editor_version,
-            extended_engine_caps,
-            game_setup,
-            guid,
-            save_game_file_ext,
-            save_game_folder_name,
-            fonts,
-            topmost_sprite,
-            sprite_flags,
-            inventory_items,
-            cursors,
-            char_interact_scripts,
-            inv_item_interact_scripts,
-            parser_words,
-            global_script,
-            dialog_script,
-            scripts,
-            views,
-            characters,
-            lipsync,
-            dialogs,
-            guis,
+            version=version,
+            len_editor_version=len_editor_version,
+            editor_version=editor_version,
+            extended_engine_caps=extended_engine_caps,
+            setup=gs,
+            guid=guid,
+            save_game_file_ext=save_game_file_ext,
+            save_game_folder_name=save_game_folder_name,
+            fonts=fonts,
+            topmost_sprite=topmost_sprite,
+            sprite_flags=sprite_flags,
+            inventory_items=inventory_items,
+            cursors=cursors,
+            char_interact_scripts=char_inter_scr,
+            invitem_inter_scr=invitem_inter_scr,
+            parser_words=parser_words,
+            global_script=global_script,
+            dialog_script=dialog_script,
+            scripts=scripts,
+            views=views,
+            characters=characters,
+            lipsync=lipsync,
+            dialogs=dialogs,
+            guis=guis,
+            plugins_ver=plugins_ver,
+            plugin_data=plugin_data,
+            custom_prop_ver=custom_prop_ver,
+            schemas=schemas,
+            char_cprops=char_cprops,
+            item_cprops=item_cprops,
+            view_names=view_names,
+            item_names=item_names,
+            dialog_names=dialog_names,
+            audio_clip_types=audio_clip_types,
+            audio_clips=audio_clips,
+            play_sound_on_score=play_sound_on_score,
+            rooms=rooms,
+            fonts_ext=fonts_ext,
+            cursors_ext=cursors_ext,
         )
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
-
-
-def skip_scom(br: ByteReader) -> Script:
-    offset = br.tell()
-    br.skip(len(SCOM_SIGNATURE) + 4)
-    len_gdata = br.u32()
-    num_codes = br.u32()
-    len_strings = br.u32()
-    br.skip(len_gdata)
-    br.skip(num_codes * 4)
-    br.skip(len_strings)
-    num_fixups = br.u32()
-    br.skip(num_fixups)  # fixup types
-    br.skip(num_fixups * 4)  # fixups
-    num_imports = br.u32()
-    for _ in range(num_imports):
-        br.cstr()  # name
-    num_exports = br.u32()
-    for _ in range(num_exports):
-        br.cstr()  # name
-        br.skip(4)  # address
-    num_sections = br.u32()
-    section_names: list[str] = []
-    for _ in range(num_sections):
-        section_names.append(br.cstr())  # name
-        br.skip(4)  # offset
-    br.skip(4)  # signature
-    size = br.tell() - offset
-
-    name = section_names[0] if section_names else ""
-    return Script(offset, size, name)

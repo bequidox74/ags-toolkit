@@ -98,8 +98,8 @@ class Character:
         starts_with_item = [br.u16() for _ in range(301)]
         act_x = br.i16()
         act_y = br.i16()
-        name = br.string(40)
-        script_name = br.string(20)
+        name = br.fstr(40)
+        script_name = br.fstr(20)
         on = bool(br.u8())
         br.skip(1)  # padding
 
