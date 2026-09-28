@@ -30,7 +30,7 @@ class StringWriter:
     def cr(self) -> None:
         self.level = 0
 
-    def print(self, s: str) -> None:
+    def print(self, s) -> None:
         if self._print_indent:
             self.buffer.append(self._current_indent)
             self._print_indent = False

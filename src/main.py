@@ -8,7 +8,7 @@ from pathlib import Path
 import extract
 from _internal.byte_reader import ByteReader
 from _internal.utils import chunked_copy
-from data.clib import CLib
+from data.clib import CLib, StringWriter
 from data.gamefile import GameData
 
 DEFAULT_CHUNK_SIZE = 64
@@ -60,6 +60,7 @@ def _init_assets_parser(subparsers) -> None:
 def _init_gamedata_parser(subparsers) -> None:
     gd_parser: ArgumentParser = subparsers.add_parser("gamedata")
     gd_parser.add_argument("input", type=Path)
+    gd_parser.add_argument("-j", "--json", action="store_true")
     gd_parser.add_argument("-o", "--output", type=Path, required=True)
     gd_parser.set_defaults(func=extract_gamedata)
 
@@ -129,7 +130,11 @@ def extract_gamedata(args: Namespace) -> None:
         gdata = GameData.read(ByteReader(sin))
     outpath = _prepare_output(args.output, "gamedata.json")
     with open(outpath, "w", encoding="utf-8") as sout:
-        json.dump(gdata.to_dict(), sout, indent=2)
+        if args.json:
+            json.dump(gdata.to_dict(), sout, indent=2)
+        else:
+            sw = StringWriter()
+            sout.write(gdata.to_index(sw))
 
 
 def _prepare_output(path: Path, default_name: str) -> Path:

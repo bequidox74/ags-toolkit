@@ -4,6 +4,7 @@ from enum import IntEnum, IntFlag
 from typing import ClassVar, NamedTuple
 
 from _internal.byte_reader import ByteReader
+from _internal.string_writer import StringWriter
 from _internal.utils import check
 from data import encrypt
 from data.character import Character
@@ -16,29 +17,30 @@ SCOM_SIGNATURE = b"SCOM"
 SCOM_END_SIGNATURE = 0xBEEFCAFE
 
 
-class PaletteType(IntEnum):
-    GAMEWIDE = 0
-    BACKGROUND = 2
-
-
-class GameResolutionType(IntEnum):
-    UNDEFINED = -1
-    DEFAULT = 0
-    R320X200 = 1
-    R320X240 = 2
-    R640X400 = 3
-    R640X480 = 4
-    R800X600 = 5
-    R1024X768 = 6
-    R1280X720 = 7
-    CUSTOM = 8
-
-
 @dataclass
 class GameSetup:
     class Resolution(NamedTuple):
         width: int  # u32
         height: int  # u32
+
+        def __str__(self) -> str:
+            return f"{self.width}x{self.height}"
+
+    class PaletteType(IntEnum):
+        GAMEWIDE = 0
+        BACKGROUND = 2
+
+    class ResolutionType(IntEnum):
+        UNDEFINED = -1
+        DEFAULT = 0
+        R320X200 = 1
+        R320X240 = 2
+        R640X400 = 3
+        R640X480 = 4
+        R800X600 = 5
+        R1024X768 = 6
+        R1280X720 = 7
+        CUSTOM = 8
 
     class Option(IntEnum):
         DEBUGMODE = 0
@@ -129,13 +131,13 @@ class GameSetup:
     dialog_options_bullet: int  # u32
     hotdot_color: int  # u16
     hotdot_outer_color: int  # u16
-    game_unique_id: int  # u32
+    unique_id: int  # u32
     num_guis: int  # u32
     num_cursors: int  # u32
-    game_resolution_type: GameResolutionType  # u32
-    game_resolution: GameSetup.Resolution | None
+    res_type: ResolutionType  # u32
+    resolution: GameSetup.Resolution | None
     lipsync_default_frame: int  # u32
-    inv_hotspot_marker_image: int  # u32
+    inv_hotspot_marker_img: int  # u32
     # reserved 17 * 4
     has_game_message: list[bool]  # u32[500]
     load_dictionary: bool  # u32
@@ -150,9 +152,9 @@ class GameSetup:
         options: list[int] = []
         for _ in range(GameSetup.NUM_OPTIONS):
             options.append(br.u32())
-        palette_types: list[PaletteType] = []
+        palette_types: list[GameSetup.PaletteType] = []
         for _ in range(GameSetup.NUM_PALETTE_COLORS):
-            palette_types.append(PaletteType(br.u8()))
+            palette_types.append(GameSetup.PaletteType(br.u8()))
         palette_colors: list[Color] = []
         for _ in range(GameSetup.NUM_PALETTE_COLORS):
             r = br.u8() * 4
@@ -177,12 +179,12 @@ class GameSetup:
         game_unique_id = br.u32()
         num_guis = br.u32()
         num_cursors = br.u32()
-        game_resolution_type = GameResolutionType(br.u32())
-        game_resolution: GameSetup.Resolution | None = None
-        if game_resolution_type is GameResolutionType.CUSTOM:
+        res_type = GameSetup.ResolutionType(br.u32())
+        resolution: GameSetup.Resolution | None = None
+        if res_type is GameSetup.ResolutionType.CUSTOM:
             w = br.u32()
             h = br.u32()
-            game_resolution = GameSetup.Resolution(w, h)
+            resolution = GameSetup.Resolution(w, h)
         lipsync_default_frame = br.u32()
         inv_hotspot_marker_image = br.u32()
         br.skip(17 * 4)
@@ -215,8 +217,8 @@ class GameSetup:
             game_unique_id,
             num_guis,
             num_cursors,
-            game_resolution_type,
-            game_resolution,
+            res_type,
+            resolution,
             lipsync_default_frame,
             inv_hotspot_marker_image,
             has_game_message,
@@ -296,6 +298,12 @@ class InventoryItem:
 
 @dataclass
 class Cursor:
+    class Flag(IntFlag):
+        ANIMMOVE = 1
+        DISABLED = 2
+        STANDARD = 4
+        HOTSPOT = 8
+
     image: int  # u32
     hotspot_x: int  # i16
     hotspot_y: int  # i16
@@ -551,13 +559,12 @@ class GameData:
     SIGNATURE: ClassVar = "Adventure Creator Game File v2"
 
     version: int  # u32
-    len_editor_version: int  # u32
-    editor_version: str  # str[len_editor_version]
+    editor_version: str  # pstr
     extended_engine_caps: int
     setup: GameSetup
     guid: str  # str[40]
-    save_game_file_ext: str  # str[20]
-    save_game_folder_name: str  # str[50]
+    savegame_file_ext: str  # str[20]
+    savegame_folder: str  # str[50]
     fonts: list[Font]
     topmost_sprite: int  # u32
     sprite_flags: list[int]
@@ -597,8 +604,7 @@ class GameData:
         signature = br.fstr(len(GameData.SIGNATURE))
         check(signature == GameData.SIGNATURE, "game data file signature mismatch")
         version = br.u32()
-        len_editor_version = br.u32()
-        editor_version = br.fstr(len_editor_version)
+        editor_version = br.pstr()
         extended_engine_caps = br.u32()
         gs = GameSetup.read(br)
         guid = br.fstr(40)
@@ -657,13 +663,12 @@ class GameData:
 
         return GameData(
             version=version,
-            len_editor_version=len_editor_version,
             editor_version=editor_version,
             extended_engine_caps=extended_engine_caps,
             setup=gs,
             guid=guid,
-            save_game_file_ext=save_game_file_ext,
-            save_game_folder_name=save_game_folder_name,
+            savegame_file_ext=save_game_file_ext,
+            savegame_folder=save_game_folder_name,
             fonts=fonts,
             topmost_sprite=topmost_sprite,
             sprite_flags=sprite_flags,
@@ -699,3 +704,114 @@ class GameData:
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
+
+    def to_index(self, sw: StringWriter | None = None) -> str:
+        if sw is None:
+            sw = StringWriter()
+
+        sw.println("=== AGS Game Asset Index ===")
+        sw.println(f"Version: {self.version}")
+        sw.println(f"Editor version: {self.editor_version}")
+        sw.println(f"Game name: {self.setup.game_name}")
+        sw.println(f"Game unique ID: {self.setup.unique_id}")
+        sw.println(f"Savegame extension: {self.savegame_file_ext}")
+        sw.println(f"Savegame folder: {self.savegame_folder}")
+        sw.println(f"Total sprites: {self.topmost_sprite}")
+
+        sw.print("Game resolution: ")
+        sw.print(self.setup.res_type.name.lower().removeprefix("r"))
+        if self.setup.res_type is GameSetup.ResolutionType.CUSTOM:
+            sw.print(f" ({self.setup.resolution})")
+        sw.println()
+        sw.println()
+
+        sw.println("Options:")
+        sw.indent()
+        sw.println(
+            ", ".join(
+                f"{o.name}={self.setup.options[o.value]}" for o in GameSetup.Option
+            )
+        )
+        sw.dedent()
+        sw.println()
+
+        sw.println("Inventory items:")
+        sw.indent()
+        for scr_name, item in zip(self.item_names, self.inventory_items):
+            sw.println(f"- {item.description} ({scr_name})")
+        sw.dedent()
+        sw.println()
+
+        sw.println("Characters:")
+        sw.indent()
+        for c in self.characters:
+            sw.println(f"{c.name} ({c.scr_name}):")
+            sw.indent()
+            sw.println(f"- starting room = {c.starting_room}")
+            sw.println(f"- view = {c.view}")
+            sw.println(f"- default view = {c.default_view}")
+            sw.println(f"- talk view = {c.talk_view}")
+            sw.println(f"- think view = {c.think_view}")
+            sw.println(f"- blink view = {c.blink_view}")
+            sw.println(f"- blink interval = {c.blink_interval}")
+            sw.println(f"- idle view = {c.talk_view}")
+            sw.println(f"- idle delay = {c.idle_delay}")
+            sw.println(f"- idle anim speed = {c.idle_anim_speed}")
+            sw.println(f"- walk speed x = {c.walk_speed}")
+            sw.println(f"- walk speed y = {c.walk_speed_y}")
+            sw.println(f"- walk wait = {c.walk_wait}")
+            sw.println(f"- talk color = {c.talk_color}")
+            sw.println(f"- blocking width = {c.blocking_width}")
+            sw.println(f"- blocking height = {c.blocking_height}")
+            sw.dedent()
+        sw.dedent()
+        sw.println()
+
+        sw.println("Cursors:")
+        sw.indent()
+        for c in self.cursors:
+            sw.println(
+                f"- {c.name}, image={c.image}, hotx={c.hotspot_x}, hoty={c.hotspot_y}"
+            )
+        sw.dedent()
+        sw.println()
+
+        sw.println("Views:")
+        sw.indent()
+        for name, view in zip(self.view_names, self.views):
+            sw.println(f"- {name} ({len(view.loops)} loops)")
+            sw.indent()
+            for li, l in enumerate(view.loops):
+                sw.println(f"- {li} (run next = {l.run_next_loop})")
+                sw.indent()
+                for f in l.frames:
+                    sw.println(f"- {f.image}, flipped={f.flipped}, delay={f.delay}")
+                sw.dedent()
+            sw.dedent()
+        sw.dedent()
+        sw.println()
+
+        sw.println("Dialogs:")
+        sw.indent()
+        for name, dlg in zip(self.dialog_names, self.dialogs):
+            sw.println(f"- {name}")
+            sw.indent()
+            for op in dlg.options:
+                sw.println(f"- {op}")
+            sw.dedent()
+        sw.dedent()
+
+        sw.println("Schema items:")
+        sw.indent()
+        for s in self.schemas:
+            sw.println(f"- {s.name} ({s.type}): {s.description}")
+        sw.dedent()
+        sw.println()
+
+        sw.println("Audio clips:")
+        sw.indent()
+        for c in self.audio_clips:
+            sw.println(f"- {c.script_name} ({c.file_name}) {c.volume}%")
+        sw.dedent()
+
+        return str(sw)

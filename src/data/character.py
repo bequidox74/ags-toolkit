@@ -8,7 +8,7 @@ class Character:
     default_view: int  # u32
     talk_view: int  # u32
     view: int  # u32
-    starting_room: int  # u32
+    starting_room: int  # i32
     prev_room: int  # u32 (runtime)
     x: int  # i32
     y: int  # i32
@@ -49,7 +49,7 @@ class Character:
     act_x: int  # i16
     act_y: int  # i16
     name: str  # 40
-    script_name: str  # 20
+    scr_name: str  # 20
     on: bool  # u8
     # padding 1
 
@@ -58,7 +58,7 @@ class Character:
         default_view = br.i32() + 1
         talk_view = br.i32() + 1
         view = br.i32() + 1
-        starting_room = br.u32()
+        starting_room = br.i32()
         prev_room = br.u32()
         x = br.i32()
         y = br.i32()
