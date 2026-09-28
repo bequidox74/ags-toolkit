@@ -97,6 +97,15 @@ class GameSetup:
         NOMODMUSIC = 98
         LIPSYNCTEXT = 99
 
+    class SpriteFlag(IntFlag):
+        HIRES = 1
+        HICOLOR = 2
+        DYNAMICALLOC = 4
+        TRUECOLOR = 8
+        ALPHACHANNEL = 16
+        VAR_RESOLUTION = 32
+        HADALPHACHANNEL = 64
+
     NUM_OPTIONS: ClassVar = 100
     NUM_PALETTE_COLORS: ClassVar = 256
     NUM_GAME_MESSAGES: ClassVar = 500
