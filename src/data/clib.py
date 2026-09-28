@@ -65,7 +65,7 @@ class CLib:
     def read_file(cls, data_path: Path) -> CLib:
         suffix = data_path.suffix.casefold()
         clib: CLib
-        if suffix == ".ags":
+        if suffix in {".ags", ".vox"}:
             clib = CLib.read_ags(data_path)
         elif suffix == ".exe":
             clib = CLib.read_exe(data_path)
