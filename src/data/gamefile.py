@@ -9,6 +9,7 @@ from data import encrypt
 from data.character import Character
 from data.common import Color
 from data.dialog import Dialog
+from data.gui import GameGuis
 from data.view import View
 
 SCOM_SIGNATURE = b"SCOM"
@@ -71,7 +72,7 @@ class GameSetup:
     lipsync_default_frame: int  # u32
     inv_hotspot_marker_image: int  # u32
     # reserved 17 * 4
-    has_game_message: list[bool]  # 500
+    has_game_message: list[bool]  # u32[500]
     load_dictionary: bool  # u32
     global_scr_not_null: bool  # u32
     chars_not_null: bool  # u32
@@ -321,6 +322,7 @@ class GameData:
     characters: list[Character]
     lipsync: list[str]
     dialogs: list[Dialog]
+    guis: GameGuis
 
     @classmethod
     def read(cls, br: ByteReader) -> GameData:
@@ -368,12 +370,14 @@ class GameData:
         ]
         lipsync = [br.string(50) for _ in range(20)]
         global_messages: list[str] = []
-        while True:
+        for hm in game_setup.has_game_message:
+            if not hm:
+                continue
             size = br.u32()
-            if size == 0:
-                break
-            global_messages.append(encrypt.decrypt(br.read(size)))
+            s = encrypt.decrypt(br.read(size))
+            global_messages.append(s)
         dialogs = [Dialog.read(br) for _ in range(game_setup.num_dialogs)]
+        guis = GameGuis.read(br)
 
         return GameData(
             version,
@@ -399,6 +403,7 @@ class GameData:
             characters,
             lipsync,
             dialogs,
+            guis,
         )
 
     def to_dict(self) -> dict:

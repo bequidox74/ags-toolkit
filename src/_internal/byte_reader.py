@@ -45,6 +45,12 @@ class ByteReader:
     def seek(self, to: int, whence: int = io.SEEK_SET) -> None:
         self.stream.seek(to, whence)
 
+    def peek(self, size: int = 0) -> bytes:
+        pos = self.stream.tell()
+        data = self.stream.read(size)
+        self.stream.seek(pos)
+        return data
+
     def byte(self) -> int:
         return self.stream.read(1)[0]
 
