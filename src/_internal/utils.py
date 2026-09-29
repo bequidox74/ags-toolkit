@@ -1,9 +1,18 @@
+from pathlib import Path
 from typing import BinaryIO
 
 
 def check(cond: bool, message: str | None = None) -> None:
     if not cond:
         raise AssertionError(message)
+
+
+def is_exe(p: Path) -> bool:
+    return p.suffix.casefold() == ".exe"
+
+
+def is_ags(p: Path) -> bool:
+    return p.suffix.casefold() == ".ags"
 
 
 def chunked_copy(

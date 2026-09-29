@@ -1,7 +1,7 @@
 import logging
 from argparse import ArgumentParser
 
-from commands import unpack
+from commands import sprites, unpack
 
 
 def main() -> None:
@@ -18,6 +18,7 @@ def main() -> None:
 
     subp = parser.add_subparsers(title="commands")
     unpack.init_parser(subp)
+    sprites.init_parser(subp)
 
     args = parser.parse_args()
     logging.basicConfig(format="%(message)s", level=logging.INFO)

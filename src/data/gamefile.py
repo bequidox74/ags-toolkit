@@ -8,7 +8,7 @@ from _internal.string_writer import StringWriter
 from _internal.utils import check
 from data import encrypt
 from data.character import Character
-from data.common import Color
+from data.common import ColorRGB
 from data.dialog import Dialog
 from data.gui import GameGuis
 from data.view import View
@@ -116,7 +116,7 @@ class GameSetup:
     # padding 2
     options: list[int]  # u32[100]
     palette_types: list[PaletteType]  # u1[256]
-    palette_colors: list[Color]  # 256
+    palette_colors: list[ColorRGB]  # 256
     num_views: int  # u32
     num_chars: int  # u32
     player_char_id: int  # u32
@@ -155,13 +155,13 @@ class GameSetup:
         palette_types: list[GameSetup.PaletteType] = []
         for _ in range(GameSetup.NUM_PALETTE_COLORS):
             palette_types.append(GameSetup.PaletteType(br.u8()))
-        palette_colors: list[Color] = []
+        palette_colors: list[ColorRGB] = []
         for _ in range(GameSetup.NUM_PALETTE_COLORS):
             r = br.u8() * 4
             g = br.u8() * 4
             b = br.u8() * 4
             br.skip(1)
-            palette_colors.append(Color(r, g, b))
+            palette_colors.append(ColorRGB(r, g, b))
         num_views = br.u32()
         num_chars = br.u32()
         player_char_id = br.u32()

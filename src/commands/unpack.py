@@ -15,7 +15,7 @@ CHUNK_SIZE_KIB = 64
 def init_parser(subp) -> None:
     parser: ArgumentParser = subp.add_parser(
         "unpack",
-        help="unpack assets contained in an AGS game",
+        help="unpack assets from .exe or .ags",
     )
     parser.add_argument(
         "input",
