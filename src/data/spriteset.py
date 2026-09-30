@@ -33,7 +33,7 @@ class SpriteIndex:
         count = br.u32()
         widths = [br.u16() for _ in range(count)]
         heights = [br.u16() for _ in range(count)]
-        offsets = [br.u16() for _ in range(count)]
+        offsets = [br.u64() for _ in range(count)]
 
         return SpriteIndex(
             version=version,
@@ -115,16 +115,17 @@ class Sprite:
     @staticmethod
     def read_slot(
         version: int,
-        compression: Sprite.Compression,
+        def_compr: Sprite.Compression,
         br: ByteReader,
     ) -> Sprite | None:
         bytes_per_pixel = br.u8()
-        if bytes_per_pixel == 0:
-            br.u8()  # skip to preserve alignment
-            return None  # skip empty slots
         storage_fmt = Sprite.StorageFormat(br.u8())  # pylint: disable=all
+        if bytes_per_pixel == 0:
+            return None  # skip empty slots
+        assert bytes_per_pixel in (1, 2, 4), "BPP must be 1/2/4"
 
         num_palette = 0
+        compression = def_compr
         if version >= Sprite.Version.STORAGEFORMATS:
             num_palette = br.u8() + 1
             compression = Sprite.Compression(br.u8())
@@ -209,10 +210,11 @@ class SpriteSet:
     last_slot: int  # u32
     store_flags: int  # u8
     # reserved u8[3]
-    slots: list[Sprite | None]
+    off_sprites: int
 
     @staticmethod
     def read(br: ByteReader) -> SpriteSet:
+        begin = br.tell()
         version = br.u16()
         signature = br.fstr(len(SpriteSet.SIGNATURE))
         check(signature == SpriteSet.SIGNATURE, "sprite set signature mismatch")
@@ -221,14 +223,7 @@ class SpriteSet:
         last_slot = br.u32()
         store_flags = br.u8()
         br.skip(3)  # reserved
-        slots = [
-            Sprite.read_slot(
-                version,
-                compression,
-                br,
-            )
-            for _ in range(last_slot + 1)
-        ]
+        off_sprites = br.tell() - begin
 
         return SpriteSet(
             version=version,
@@ -236,5 +231,5 @@ class SpriteSet:
             spr_file_id=spr_file_id,
             last_slot=last_slot,
             store_flags=store_flags,
-            slots=slots,
+            off_sprites=off_sprites,
         )

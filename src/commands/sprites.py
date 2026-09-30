@@ -6,11 +6,11 @@ from _internal import utils
 from _internal.byte_reader import ByteReader
 from _internal.utils import check
 from data.clib import CLib
-from data.spriteset import SpriteSet
+from data.spriteset import Sprite, SpriteIndex, SpriteSet
 
 logger = logging.getLogger(__name__)
 
-SPRITESET_FILE = "acsprset.spr"
+SPRITE_SET_FILE = "acsprset.spr"
 INDEX_FILE = "sprindex.dat"
 
 
@@ -22,7 +22,7 @@ def init_parser(subp) -> None:
     parser.add_argument(
         "input",
         type=Path,
-        help=f"input file (.exe/.ags/{SPRITESET_FILE}/{INDEX_FILE})",
+        help=f"input file (.exe/.ags/{SPRITE_SET_FILE}/{INDEX_FILE})",
     )
     parser.add_argument(
         "output",
@@ -50,12 +50,16 @@ def _extract(args: Namespace) -> None:
 def extract(pin: Path, pout: Path, dry_run: bool, ranges_str: str | None) -> None:
     ranges: list[range] = []
     if ranges_str:
-        ranges = _parse_ranges(ranges_str)
+        try:
+            ranges = _parse_ranges(ranges_str)
+        except ValueError:
+            logger.exception("Error while parsing range spec:")
+            return
 
     name = pin.name.casefold()
     clib: CLib | None = None
-    if name == SPRITESET_FILE:
-        # check for sprite index for a speed-up.
+    if name == SPRITE_SET_FILE:
+        # check for an index, and rebuild if necessary.
         pass
     elif name == INDEX_FILE:
         # sprite set must be a sibling.
@@ -69,7 +73,8 @@ def extract(pin: Path, pout: Path, dry_run: bool, ranges_str: str | None) -> Non
         raise ValueError(f"unknown file type: {pin.suffix}")
 
     if clib is not None:  # .exe/.ags
-        sprset_file = clib["acsprset.spr"]
+        sprset_file = clib[SPRITE_SET_FILE]
+        spridx_file = clib[INDEX_FILE]
         with open(pin, "rb") as sin:
             br = ByteReader(sin)
 
@@ -77,15 +82,29 @@ def extract(pin: Path, pout: Path, dry_run: bool, ranges_str: str | None) -> Non
             sin.seek(off_sprset)
             sprset = SpriteSet.read(br)
 
+            off_spridx = clib.self_offset + spridx_file.offset
+            sin.seek(off_spridx)
+            spridx = SpriteIndex.read(br)
+
+            # TODO: fallback to reading sprites directly
+            check(sprset.spr_file_id == spridx.spr_file_id, "sprite file ID mismatch")
+
             if not ranges:
-                ranges.append(range(len(sprset.slots)))
+                ranges.append(range(spridx.last_slot + 1))
             for r in ranges:
                 for i in r:
-                    slot = sprset.slots[i]
-                    if slot is None:
+                    off = off_sprset + spridx.offsets[i]
+                    sin.seek(off)
+                    try:
+                        sprite = Sprite.read_slot(
+                            sprset.version, sprset.compression, br
+                        )
+                        if sprite is None:
+                            continue
+                        logger.info("w: %d, h: %d", sprite.width, sprite.height)
+                    except Exception:  # pylint: disable=all
+                        logger.exception("Error while extracting sprite %d:", i)
                         continue
-                    sin.seek(off_sprset + slot.off_data)
-                    bitmap = slot.read(br)
     else:  # acsprset.spr/sprindex.dat
         pass
 
@@ -104,5 +123,5 @@ def _parse_ranges(s: str) -> list[range]:
             start, end = int(bounds[0]), int(bounds[1])
             result.append(range(start, end + 1))
         else:
-            raise ValueError(f"illegal range spec: {s}")
+            raise ValueError(f"invalid range spec: {s}")
     return result
