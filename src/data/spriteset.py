@@ -1,13 +1,12 @@
 import io
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum, IntEnum, IntFlag
-from typing import ClassVar, Self
+from typing import ClassVar, NamedTuple
 
 from _internal.utils import check
+from data import decode
 from data.character import ByteReader
-from data.common import Color, ColorRGBA
 
 
 @dataclass(repr=False)
@@ -51,43 +50,13 @@ class StoreFlag(IntFlag):
     OPTIMIZE_FOR_SIZE = 1
 
 
-type ColorDecoder = Callable[[bytes], ColorRGBA]
-
-
 @dataclass(repr=False)
 class Sprite:
-    class StorageFormat(Enum):
-        @staticmethod
-        def decode_rgb888(b: bytes) -> ColorRGBA:
-            c = int.from_bytes(b[:3], byteorder=sys.byteorder)
-            return ColorRGBA((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, 255)
-
-        @staticmethod
-        def decode_argb8888(b: bytes) -> ColorRGBA:
-            c = int.from_bytes(b[:4], byteorder=sys.byteorder)
-            return ColorRGBA(
-                (c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, (c >> 24) & 0xFF
-            )
-
-        @staticmethod
-        def decode_rgb565(b: bytes) -> ColorRGBA:
-            c = int.from_bytes(b[:2], byteorder=sys.byteorder)
-            return ColorRGBA((c >> 11) & 0x1F, (c >> 5) & 0x2F, c & 0x1F, 255)
-
-        decode: ColorDecoder
-        bpp: int
-
-        UNDEFINED = (0, None, 0)  # type: ignore
-        PALETTE_RGB888 = (32, decode_rgb888, 3)  # 3 bytes
-        PALETTE_ARGB8888 = (33, decode_argb8888, 4)  # 4 bytes
-        PALETTE_RGB565 = (34, decode_rgb565, 2)  # 2 bytes
-
-        def __new__(cls, value: int, decoder: ColorDecoder, bpp: int) -> Self:
-            obj = object.__new__(cls)
-            obj._value_ = value
-            obj.decode = decoder
-            obj.bpp = bpp
-            return obj
+    class Palette(Enum):
+        UNDEFINED = 0
+        RGB888 = 32
+        ARGB8888 = 33
+        RGB565 = 34
 
     class Compression(IntEnum):
         NONE = 0
@@ -104,8 +73,8 @@ class Sprite:
         STORAGEFORMATS = 12
 
     bytes_per_pixel: int  # u8
-    storage_fmt: Sprite.StorageFormat  # u8
-    palette: list[Color]  # [u8]
+    palette_fmt: Sprite.Palette  # u8
+    palette: list[int]  # [u8]
     compression: Compression  # u8
     width: int  # u16
     height: int  # u16
@@ -118,8 +87,9 @@ class Sprite:
         def_compr: Sprite.Compression,
         br: ByteReader,
     ) -> Sprite | None:
+        start = br.tell()
         bytes_per_pixel = br.u8()
-        storage_fmt = Sprite.StorageFormat(br.u8())  # pylint: disable=all
+        storage_fmt = Sprite.Palette(br.u8())  # pylint: disable=all
         if bytes_per_pixel == 0:
             return None  # skip empty slots
         assert bytes_per_pixel in (1, 2, 4), "BPP must be 1/2/4"
@@ -132,10 +102,12 @@ class Sprite:
         width = br.u16()
         height = br.u16()
 
-        palette: list[Color] = []
-        if storage_fmt.bpp > 0:
+        palette: list[int] = []
+        if storage_fmt is not Sprite.Palette.UNDEFINED:
+            spec = SPECS[storage_fmt]
+            decoder = DECODERS[SPECS[storage_fmt].bpp]
             for _ in range(num_palette):
-                palette.append(storage_fmt.decode(br.read(storage_fmt.bpp)))
+                palette.append(decoder(br.read(spec.bpp)))
 
         if (
             version >= Sprite.Version.STORAGEFORMATS
@@ -144,12 +116,12 @@ class Sprite:
             len_data = br.u32()
         else:
             len_data = width * height * bytes_per_pixel
-        off_data = br.tell()
+        off_data = br.tell() - start
         br.skip(len_data)
 
         return Sprite(
             bytes_per_pixel=bytes_per_pixel,
-            storage_fmt=storage_fmt,
+            palette_fmt=storage_fmt,
             palette=palette,
             compression=compression,
             width=width,
@@ -158,44 +130,74 @@ class Sprite:
             off_data=off_data,
         )
 
-    def read(self, br: ByteReader) -> bytes:
+    def read_bitmap(self, br: ByteReader) -> bytes:
         """Decode sprite data into a RGBA8888 bitmap."""
         raw = br.read(self.len_data)
         decomp: bytes = b""
+        size = self.width * self.height * self.bytes_per_pixel
+
+        if self.palette_fmt is not Sprite.Palette.UNDEFINED:
+            bpp = 1
+        else:
+            bpp = self.bytes_per_pixel
+
         if self.compression == Sprite.Compression.NONE:
             decomp = raw
         elif self.compression == Sprite.Compression.RLE:
-            decomp = Sprite.decompress_rle(raw)
+            with io.BytesIO(raw) as bio:
+                decomp = decode.rle(bpp, size, bio)
         elif self.compression == Sprite.Compression.LZW:
-            decomp = Sprite.decompress_lzw(raw)
+            raise NotImplementedError  # TODO
+            # decomp = Sprite.decompress_lzw(raw, br)
 
         if len(self.palette) > 0:  # indexed
             return self.decode_indexed(decomp)
         else:  # sequential
             return self.decode_sequential(decomp)
 
-    @staticmethod
-    def decompress_rle(data: bytes) -> bytes:
-        raise NotImplementedError  # TODO
-
-    @staticmethod
-    def decompress_lzw(data: bytes) -> bytes:
-        raise NotImplementedError  # TODO
-
     def decode_indexed(self, data: bytes) -> bytes:
-        result = bytearray()
-        for b in data:
-            result.extend(self.palette[b].rgba_bytes())
-        return bytes(result)
+        result: list[int] = []
+        for i in data:
+            result.append(self.palette[i])
+        return decode.pack_bitmap(result)
 
     def decode_sequential(self, data: bytes) -> bytes:
-        result = bytearray()
-        fmt = self.storage_fmt
+        result: list[int] = []
+        bpp = self.bytes_per_pixel
+        decoder = DECODERS[bpp]
         with io.BytesIO(data) as sin:
             br = ByteReader(sin)
-            c = fmt.decode(br.read(fmt.bpp))
-            result.extend(c.rgba_bytes())
-        return bytes(result)
+            while True:
+                c = decoder(br.read(bpp))
+                if not c:
+                    break
+                result.append(c)
+        return decode.pack_bitmap(result)
+
+
+type ColorDecoder = Callable[[bytes | memoryview], int]
+
+
+class FormatSpec(NamedTuple):
+    code: Sprite.Palette
+    bpp: int
+
+
+DECODERS: dict[int, ColorDecoder] = {
+    2: decode.rgb565,
+    3: decode.rgb888,
+    4: decode.argb8888,
+}
+
+SPECS = {
+    spec.code: spec
+    for spec in [
+        FormatSpec(Sprite.Palette.UNDEFINED, 0),
+        FormatSpec(Sprite.Palette.RGB565, 2),
+        FormatSpec(Sprite.Palette.RGB888, 3),  # disallowed in 3.6.0.55?
+        FormatSpec(Sprite.Palette.ARGB8888, 4),
+    ]
+}
 
 
 @dataclass(repr=False)

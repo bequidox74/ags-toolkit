@@ -1,4 +1,6 @@
 __pycache__/
 *.pyc
+profile*.txt
+*.lprof
 
 .vscode/
